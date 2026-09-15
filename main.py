@@ -7,7 +7,7 @@ TARGET_URL = "https://ustm.jp/ct/kintai/"
 ADMIN_ID = "admin7890"
 
 # Step 1 で取得したGASのウェブアプリURLを入力してください
-GAS_WEBAPP_URL = "ここにGASのウェブアプリURLを貼り付け"
+GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzNB10avW24GlEiwiQFTlZMF-C1CSWlDoVMu6hYLwuHBbRuxgW3d85tBlF-qdysQgx7/exec"
 
 def run():
     with sync_playwright() as p:
