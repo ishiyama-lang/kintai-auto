@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -12,24 +13,23 @@ def run():
     with sync_playwright() as p:
         print("クラウド上のブラウザを起動中...")
         browser = p.chromium.launch(headless=True)
-        # 画面サイズを広めに設定して要素の非表示を防ぐ
         context = browser.new_context(viewport={'width': 1280, 'height': 800})
         page = context.new_page()
 
-        # タイムアウトを60秒に延長
+        # タイムアウトを60秒に設定
         page.set_default_timeout(60000)
 
         print("勤怠システムへアクセス中...")
         page.goto(TARGET_URL, wait_until="networkidle")
 
         print("ログイン処理を実行中...")
-        # 入力欄の探索（テキストボックスを探して入力）
+        # ID入力欄の取得と入力
         inputs = page.locator("input[type='text'], input[type='password'], input:not([type='hidden'])")
         if inputs.count() > 0:
             inputs.first.fill(ADMIN_ID)
         
-        # 認証・ログインボタンの判定とクリック
-        login_btn = page.locator("button, input[type='submit'], input[type='button']").filter(has_text=lambda t: any(k in t for k in ["認証", "ログイン", "送信", "決定"]))
+        # 認証・ログインボタンの判定とクリック（正規表現でテキスト指定）
+        login_btn = page.locator("button, input[type='submit'], input[type='button']").filter(has_text=re.compile(r"認証|ログイン|送信|決定"))
         if login_btn.count() > 0:
             login_btn.first.click()
         else:
@@ -38,14 +38,15 @@ def run():
         page.wait_for_timeout(5000)
 
         print("CSVデータ生成・出力処理中...")
-        # CSV出力ボタンの探索とクリック
-        csv_btn = page.locator("button, a, input").filter(has_text=lambda t: any(k in t for k in ["CSV", "出力", "ダウンロード", "エクスポート"]))
+        # CSV出力ボタンの判定とクリック
+        csv_btn = page.locator("button, a, input").filter(has_text=re.compile(r"CSV|出力|ダウンロード|エクスポート"))
         
         with page.expect_download() as download_info:
             if csv_btn.count() > 0:
                 csv_btn.first.click()
             else:
-                raise Exception("CSV出力ボタンが見つかりませんでした。")
+                # ボタンが見つからない場合は画面全体のクリック可能なCSV要素を探す
+                page.click("text=/CSV|出力/i")
         
         download = download_info.value
         path = download.path()
