@@ -1,6 +1,7 @@
 import os
 import re
 import requests
+from datetime import datetime
 from playwright.sync_api import sync_playwright
 
 TARGET_URL = "https://ustm.jp/ct/kintai/"
@@ -10,6 +11,10 @@ ADMIN_ID = "admin7890"
 GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzNB10avW24GlEiwiQFTlZMF-C1CSWlDoVMu6hYLwuHBbRuxgW3d85tBlF-qdysQgx7/exec"
 
 def run():
+    # 実行時の現在の年月（例: 2026-09）を取得
+    current_ym = datetime.now().strftime("%Y-%m")
+    print(f"対象年月: {current_ym}")
+
     with sync_playwright() as p:
         print("クラウド上のブラウザを起動中...")
         browser = p.chromium.launch(headless=True)
@@ -28,14 +33,34 @@ def run():
         if inputs.count() > 0:
             inputs.first.fill(ADMIN_ID)
         
-        # 認証・ログインボタンの判定とクリック（正規表現でテキスト指定）
+        # 認証・ログインボタンの判定とクリック
         login_btn = page.locator("button, input[type='submit'], input[type='button']").filter(has_text=re.compile(r"認証|ログイン|送信|決定"))
         if login_btn.count() > 0:
             login_btn.first.click()
         else:
             page.keyboard.press("Enter")
         
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(3000)
+
+        print(f"期間選択（{current_ym}）を実行中...")
+        # 1. ドロップダウン（<select>）が存在する場合の選択処理
+        selects = page.locator("select")
+        if selects.count() > 0:
+            try:
+                # 選択肢のvalueまたはラベルで該当する年月を選択
+                selects.first.select_option(value=current_ym)
+            except:
+                try:
+                    selects.first.select_option(label=current_ym)
+                except Exception as e:
+                    print(f"ドロップダウン選択失敗: {e}")
+
+        # 2. <input> 形式の入力フィールドの場合
+        ym_input = page.locator("input[type='month'], input[name*='month'], input[name*='date'], input[id*='month']")
+        if ym_input.count() > 0:
+            ym_input.first.fill(current_ym)
+
+        page.wait_for_timeout(1000)
 
         print("CSVデータ生成・出力処理中...")
         # CSV出力ボタンの判定とクリック
@@ -45,7 +70,6 @@ def run():
             if csv_btn.count() > 0:
                 csv_btn.first.click()
             else:
-                # ボタンが見つからない場合は画面全体のクリック可能なCSV要素を探す
                 page.click("text=/CSV|出力/i")
         
         download = download_info.value
