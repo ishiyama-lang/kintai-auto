@@ -11,7 +11,6 @@ ADMIN_ID = "admin7890"
 GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzNB10avW24GlEiwiQFTlZMF-C1CSWlDoVMu6hYLwuHBbRuxgW3d85tBlF-qdysQgx7/exec"
 
 def run():
-    # 実行時の現在の年月（例: 2026-09）を取得
     current_ym = datetime.now().strftime("%Y-%m")
     print(f"対象年月: {current_ym}")
 
@@ -21,8 +20,8 @@ def run():
         context = browser.new_context(viewport={'width': 1280, 'height': 800})
         page = context.new_page()
 
-        # タイムアウトを60秒に設定
-        page.set_default_timeout(60000)
+        # タイムアウト設定
+        page.set_default_timeout(30000)
 
         print("勤怠システムへアクセス中...")
         page.goto(TARGET_URL, wait_until="networkidle")
@@ -32,45 +31,44 @@ def run():
         inputs = page.locator("input[type='text'], input[type='password'], input:not([type='hidden'])")
         if inputs.count() > 0:
             inputs.first.fill(ADMIN_ID)
+            page.wait_for_timeout(500)
         
-        # 認証・ログインボタンの判定とクリック
-        login_btn = page.locator("button, input[type='submit'], input[type='button']").filter(has_text=re.compile(r"認証|ログイン|送信|決定"))
-        if login_btn.count() > 0:
+        # ログイン・認証ボタンの押下（Enterキー送信含む）
+        login_btn = page.locator("button, input[type='submit'], input[type='button']").filter(has_text=re.compile(r"認証|ログイン|送信|決定|次へ"))
+        if login_btn.count() > 0 and login_btn.first.is_visible():
             login_btn.first.click()
         else:
             page.keyboard.press("Enter")
-        
+
+        # ログイン後の読み込み待機
+        page.wait_for_load_state("networkidle")
         page.wait_for_timeout(3000)
 
         print(f"期間選択（{current_ym}）を実行中...")
-        # 1. ドロップダウン（<select>）が存在する場合の選択処理
+        # 表示されている <select> 要素を探して年月を選択
         selects = page.locator("select")
-        if selects.count() > 0:
-            try:
-                # 選択肢のvalueまたはラベルで該当する年月を選択
-                selects.first.select_option(value=current_ym)
-            except:
+        for i in range(selects.count()):
+            sel = selects.nth(i)
+            if sel.is_visible():
                 try:
-                    selects.first.select_option(label=current_ym)
-                except Exception as e:
-                    print(f"ドロップダウン選択失敗: {e}")
-
-        # 2. <input> 形式の入力フィールドの場合
-        ym_input = page.locator("input[type='month'], input[name*='month'], input[name*='date'], input[id*='month']")
-        if ym_input.count() > 0:
-            ym_input.first.fill(current_ym)
+                    sel.select_option(value=current_ym)
+                except:
+                    try:
+                        sel.select_option(label=current_ym)
+                    except Exception as e:
+                        print(f"選択スキップ: {e}")
 
         page.wait_for_timeout(1000)
 
         print("CSVデータ生成・出力処理中...")
-        # CSV出力ボタンの判定とクリック
-        csv_btn = page.locator("button, a, input").filter(has_text=re.compile(r"CSV|出力|ダウンロード|エクスポート"))
-        
         with page.expect_download() as download_info:
-            if csv_btn.count() > 0:
-                csv_btn.first.click()
-            else:
-                page.click("text=/CSV|出力/i")
+            # 画面上の onclick 関数を直接実行して確実にダウンロードを呼び出す
+            try:
+                page.evaluate("downloadCSV()")
+            except Exception as e:
+                print("downloadCSV() の直接実行に失敗したためボタンクリックを試行します:", e)
+                csv_btn = page.locator("button.csv, button:has-text('CSV'), a:has-text('CSV')").first
+                csv_btn.click(force=True)
         
         download = download_info.value
         path = download.path()
